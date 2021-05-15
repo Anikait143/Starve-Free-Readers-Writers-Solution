@@ -4,4 +4,4 @@ Here I have provided a cpp code as a solution for Readers-Writets starvation and
 ## Use
 
 ### C++
-`g++ stravefree.c -pthread -o cpp_output -std=c++11 && ./cpp_output && rm cpp_output`
+`g++ Starve-Free.c -pthread -o cpp_output -std=c++11 && ./cpp_output && rm cpp_output`
