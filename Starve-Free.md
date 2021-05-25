@@ -4,86 +4,109 @@ the operation of obtaining a lock on the shared data will always terminate in a 
 **Problem**:- A Writer thread does not have a chance to execute while any number of 
 Readers continuously entering and leaving the working area.
 
-To avoid this problem the following commonly known solution is proposed.
+To avoid this problem the following is ***pseudocode*** of commonly known solution is proposed.
 
 ```
+//creating semaphore
+
+struct Semaphore{
+  int value = 1;
+  FIFO_Queue* Q = new FIFO_Queue();
+}
+    
+void wait(Semaphore *S,int* process_id){
+  S->value--;
+  if(S->value < 0){
+  S->Q->push(process_id);
+  block(); 
+ }
+}
+    
+void signal(Semaphore *S){
+  S->value++;
+  if(S->value <= 0){
+  int* PID = S->Q->pop();
+  wakeup(PID);
+  }
+}
+
+struct FIFO_Queue{
+    ProcessBlock* front, rear;
+    int* pop(){
+        if(front == NULL){
+            return -1;         
+        }
+        else{
+            int* val = front->value;
+            front = front->next;
+            if(front == NULL)
+            {
+                rear = NULL;
+            }
+            return val;
+        }
+    }
+    void* push(int* val){
+        ProcessBlock* blk = new ProcessBlock();
+        blk->value = val;
+        if(rear == NULL){
+            front = rear = n;
+            
+        }
+        else{
+            rear->next = blk;
+            rear = blk;
+        }
+    }
+    
+}
+
+struct ProcessBlock{
+    ProcessBlock* next;
+    int* process_block;
+}
+
+
 //Initialization
 
-in = Semaphore(1)
-mx = Semaphore(1)
-wrt = Semaphore(1)
-ctr = Integer(0)
+int read_count = 0;                     
+Semaphore turn = new Semaphore();        
+                                         
+Semaphore rwt = new Semaphore();       
+Semaphore r_mutex = new Semaphore();   
+
 
 //Reader
 
-- Wait in
-- Wait mx
-- if (++ctr)==1, then Wait wrt
-- Signal mx
-- Signal in
-[Critical section]
-- Wait mx
-- if (--ctr)==0, then Signal wrt
-- Signal mx
+do{
+
+wait(turn,process_id);              
+       wait(r_mutex,process_id);          
+       read_count++;                       
+       if(read_count==1)                   
+         wait(rwt);                       
+       signal(turn);                       
+                                        
+       signal(r_mutex);                  
+
+       wait(r_mutex,process_id)                  
+       read_count--;                     
+       if(read_count==0)                  
+        signal(rwt);                     
+       signal(r_mutex);  
+       
+}while(true);
+
 
 //Writer
 
-- Wait in
-- Wait wrt
-- [Critical section]
-- Signal wrt
-- Signal in
+do{
+
+      wait(turn,process_id);              
+      wait(rwt,process_id);               
+      signal(turn,process_id);           
+
+      signal(rwt)                         
+
+}while(true);
 ```
-
-This solution is simple and fast enough. However the penalty in comparison to the
-common one is that the Reader must lock two mutexes to enter the working area. If
-the working area is fast and assuming that mutex locking is a heavy system call, there
-would be a benefit of having an algorithm which allows locking one mutex on
-entering the working area and one on exiting.
-
-The following presented solution removes the simultaneous use of two mutexes for a
-Reader.
-
-```
-//Initialization
-
-in = Semaphore(1)
-out = Semaphore(1)
-wrt = Semaphore(0)
-ctrin = Integer(0)
-ctrout = Integer(0)
-wait = Boolean(0)
-
-//Reader
-
-- Wait in
-- ctrin++
-- Signal in
-[Critical section]
-- Wait out
-- ctrout++
-- if (wait==1 && ctrin==ctrout)
-then Signal wrt
-- Signal out
-
-//Writer
-
-- Wait in
-- Wait out
-- if (ctrin==ctrout)
-then Signal out
-else
-- wait=1
-- Signal out
-- Wait wrt
-- wait=0
-[Critical section]
-- Signal in
-```
-
-The main idea here is that a Writer indicates to Readers its necessity to access the
-working area. At the same time no new Readers can start working. Every Reader
-leaving the working area checks if there is a Writer waiting and the last leaving
-Reader signals Writer that it is safe to proceed now. Upon completing access to the
-working area Writer signals waiting Readers that it finished allowing them to access
-the working area again.
